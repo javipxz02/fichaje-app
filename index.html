@@ -155,23 +155,41 @@
                 <div class="screen-scroll">
                     <!-- Work hours -->
                     <div class="settings-group">
-                        <h3 class="group-title">Jornada laboral</h3>
+                        <h3 class="group-title">Jornada Lunes a Jueves</h3>
                         <div class="group-list">
                             <label class="setting-row">
-                                <span>Hora inicio habitual</span>
+                                <span>Entrada L-J</span>
                                 <input type="time" id="cfgWorkStart" value="09:00" class="setting-input">
                             </label>
                             <label class="setting-row">
-                                <span>Hora fin habitual</span>
+                                <span>Salida L-J</span>
                                 <input type="time" id="cfgWorkEnd" value="19:00" class="setting-input">
                             </label>
                             <label class="setting-row">
-                                <span>Horas por día</span>
+                                <span>Horas por día (L-J)</span>
                                 <input type="number" id="cfgDailyH" value="10" min="1" max="24" step="0.5" class="setting-input">
                             </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h3 class="group-title">Jornada Viernes</h3>
+                        <div class="group-list">
                             <label class="setting-row">
-                                <span>Horas por semana</span>
-                                <input type="number" id="cfgWeeklyH" value="50" min="1" max="168" step="0.5" class="setting-input">
+                                <span>Entrada Viernes</span>
+                                <input type="time" id="cfgFridayStart" value="09:00" class="setting-input">
+                            </label>
+                            <label class="setting-row">
+                                <span>Salida Viernes</span>
+                                <input type="time" id="cfgFridayEnd" value="15:00" class="setting-input">
+                            </label>
+                            <label class="setting-row">
+                                <span>Horas Viernes</span>
+                                <input type="number" id="cfgFridayH" value="6" min="1" max="24" step="0.5" class="setting-input">
+                            </label>
+                            <label class="setting-row">
+                                <span>Horas totales semana</span>
+                                <input type="number" id="cfgWeeklyH" value="46" min="1" max="168" step="0.5" class="setting-input">
                             </label>
                         </div>
                     </div>

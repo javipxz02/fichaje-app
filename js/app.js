@@ -51,9 +51,14 @@
         chartTitle: $('#chartTitle'),
         barChart: $('#barChart'),
         segmentIndicator: $('#segmentIndicator'),
+        // Settings L-J
         cfgWorkStart: $('#cfgWorkStart'),
         cfgWorkEnd: $('#cfgWorkEnd'),
         cfgDailyH: $('#cfgDailyH'),
+        // Settings Viernes
+        cfgFridayStart: $('#cfgFridayStart'),
+        cfgFridayEnd: $('#cfgFridayEnd'),
+        cfgFridayH: $('#cfgFridayH'),
         cfgWeeklyH: $('#cfgWeeklyH'),
         cfgSheetsUrl: $('#cfgSheetsUrl'),
         btnSync: $('#btnSync'),
@@ -97,7 +102,10 @@
                 workStart: '09:00',
                 workEnd: '19:00',
                 dailyHours: 10,
-                weeklyHours: 50,
+                fridayStart: '09:00',
+                fridayEnd: '15:00',
+                fridayHours: 6,
+                weeklyHours: 46,
                 sheetsUrl: '',
             },
             session: null,          // { checkIn: ISO, inLunch: boolean }
@@ -112,15 +120,13 @@
             const parsed = JSON.parse(raw);
             const defaults = defaultData();
 
-            // Forward-compatibility migration: ensure 9:00-19:00 (10h) default
+            // Forward-compatibility migration: ensure Friday 9:00-15:00 (6h) is configured
             const settings = { ...defaults.settings, ...parsed.settings };
-            if (!parsed.settings || !parsed.settings.workStart) {
-                settings.workStart = '09:00';
-                settings.workEnd = '19:00';
-                if (settings.dailyHours === 8) {
-                    settings.dailyHours = 10;
-                    settings.weeklyHours = 50;
-                }
+            if (!parsed.settings || !parsed.settings.fridayStart) {
+                settings.fridayStart = '09:00';
+                settings.fridayEnd = '15:00';
+                settings.fridayHours = 6;
+                settings.weeklyHours = 46;
             }
 
             return {
@@ -137,6 +143,21 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     }
 
+    // ─── Schedule Helpers ────────────────────────────────────
+    function getDayTargetMin(dateInput) {
+        let d;
+        if (typeof dateInput === 'string') {
+            d = parseDate(dateInput);
+        } else if (dateInput instanceof Date) {
+            d = dateInput;
+        } else {
+            d = new Date();
+        }
+        const isFriday = d.getDay() === 5;
+        const hours = isFriday ? (data.settings.fridayHours || 6) : (data.settings.dailyHours || 10);
+        return Math.round(hours * 60);
+    }
+
     // ─── Header ──────────────────────────────────────────────
     function updateHeaderDate() {
         const now = new Date();
@@ -148,10 +169,25 @@
 
     function updateScheduleBadge() {
         if (!dom.schedulePillText) return;
-        const start = data.settings.workStart || '09:00';
-        const end = data.settings.workEnd || '19:00';
-        const h = data.settings.dailyHours || 10;
-        dom.schedulePillText.textContent = `Horario: ${start} – ${end} (${h}h)`;
+        const now = new Date();
+        const dayOfWeek = now.getDay();
+
+        if (dayOfWeek === 5) {
+            // Viernes
+            const start = data.settings.fridayStart || '09:00';
+            const end = data.settings.fridayEnd || '15:00';
+            const h = data.settings.fridayHours || 6;
+            dom.schedulePillText.textContent = `Hoy Viernes: ${start} – ${end} (${h}h)`;
+        } else if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+            // Lunes a Jueves
+            const start = data.settings.workStart || '09:00';
+            const end = data.settings.workEnd || '19:00';
+            const h = data.settings.dailyHours || 10;
+            dom.schedulePillText.textContent = `Hoy: ${start} – ${end} (${h}h)`;
+        } else {
+            // Fin de semana
+            dom.schedulePillText.textContent = `L-J: 09:00–19:00 (10h) · V: 09:00–15:00 (6h)`;
+        }
     }
 
     // ─── Navigation & Events ─────────────────────────────────
@@ -180,29 +216,56 @@
             });
         });
 
-        // Settings inputs
+        // Settings L-J inputs
         if (dom.cfgWorkStart) {
             dom.cfgWorkStart.addEventListener('change', () => {
                 data.settings.workStart = dom.cfgWorkStart.value || '09:00';
-                recalcScheduleHours();
+                recalcScheduleHours('mon_thu');
             });
         }
         if (dom.cfgWorkEnd) {
             dom.cfgWorkEnd.addEventListener('change', () => {
                 data.settings.workEnd = dom.cfgWorkEnd.value || '19:00';
-                recalcScheduleHours();
+                recalcScheduleHours('mon_thu');
             });
         }
         dom.cfgDailyH.addEventListener('change', () => {
             data.settings.dailyHours = parseFloat(dom.cfgDailyH.value) || 10;
+            updateWeeklyTotal();
             save();
             updateScheduleBadge();
             recalcOvertime();
             renderTodaySummary();
             renderStats();
         });
+
+        // Settings Viernes inputs
+        if (dom.cfgFridayStart) {
+            dom.cfgFridayStart.addEventListener('change', () => {
+                data.settings.fridayStart = dom.cfgFridayStart.value || '09:00';
+                recalcScheduleHours('friday');
+            });
+        }
+        if (dom.cfgFridayEnd) {
+            dom.cfgFridayEnd.addEventListener('change', () => {
+                data.settings.fridayEnd = dom.cfgFridayEnd.value || '15:00';
+                recalcScheduleHours('friday');
+            });
+        }
+        if (dom.cfgFridayH) {
+            dom.cfgFridayH.addEventListener('change', () => {
+                data.settings.fridayHours = parseFloat(dom.cfgFridayH.value) || 6;
+                updateWeeklyTotal();
+                save();
+                updateScheduleBadge();
+                recalcOvertime();
+                renderTodaySummary();
+                renderStats();
+            });
+        }
+
         dom.cfgWeeklyH.addEventListener('change', () => {
-            data.settings.weeklyHours = parseFloat(dom.cfgWeeklyH.value) || 50;
+            data.settings.weeklyHours = parseFloat(dom.cfgWeeklyH.value) || 46;
             save();
         });
         dom.cfgSheetsUrl.addEventListener('change', () => {
@@ -267,21 +330,41 @@
         if (id === 'stats') renderStats();
     }
 
-    function recalcScheduleHours() {
-        const start = dom.cfgWorkStart.value || '09:00';
-        const end = dom.cfgWorkEnd.value || '19:00';
-        const [sh, sm] = start.split(':').map(Number);
-        const [eh, em] = end.split(':').map(Number);
-        let diffMin = (eh * 60 + em) - (sh * 60 + sm);
-        if (diffMin <= 0) diffMin += 24 * 60;
-        const hours = Math.round((diffMin / 60) * 10) / 10;
-        data.settings.dailyHours = hours;
-        dom.cfgDailyH.value = hours;
+    function recalcScheduleHours(type) {
+        if (type === 'mon_thu') {
+            const start = dom.cfgWorkStart.value || '09:00';
+            const end = dom.cfgWorkEnd.value || '19:00';
+            const [sh, sm] = start.split(':').map(Number);
+            const [eh, em] = end.split(':').map(Number);
+            let diffMin = (eh * 60 + em) - (sh * 60 + sm);
+            if (diffMin <= 0) diffMin += 24 * 60;
+            const hours = Math.round((diffMin / 60) * 10) / 10;
+            data.settings.dailyHours = hours;
+            dom.cfgDailyH.value = hours;
+        } else if (type === 'friday') {
+            const start = dom.cfgFridayStart.value || '09:00';
+            const end = dom.cfgFridayEnd.value || '15:00';
+            const [sh, sm] = start.split(':').map(Number);
+            const [eh, em] = end.split(':').map(Number);
+            let diffMin = (eh * 60 + em) - (sh * 60 + sm);
+            if (diffMin <= 0) diffMin += 24 * 60;
+            const hours = Math.round((diffMin / 60) * 10) / 10;
+            data.settings.fridayHours = hours;
+            if (dom.cfgFridayH) dom.cfgFridayH.value = hours;
+        }
+
+        updateWeeklyTotal();
         save();
         updateScheduleBadge();
         recalcOvertime();
         renderTodaySummary();
         renderStats();
+    }
+
+    function updateWeeklyTotal() {
+        const total = (data.settings.dailyHours * 4) + data.settings.fridayHours;
+        data.settings.weeklyHours = total;
+        if (dom.cfgWeeklyH) dom.cfgWeeklyH.value = total;
     }
 
     // ─── Clock In / Out ──────────────────────────────────────
@@ -311,14 +394,14 @@
         const checkIn = new Date(data.session.checkIn);
         const checkOut = new Date();
         const totalMin = Math.round((checkOut - checkIn) / 60000);
-        const dailyMin = data.settings.dailyHours * 60;
+        const dayTargetMin = getDayTargetMin(checkOut);
 
         // Calculate today's total to determine overtime
         const todayStr = dateStr(checkOut);
         const todayRecords = data.records.filter(r => r.date === todayStr);
         const prevMin = todayRecords.reduce((s, r) => s + r.totalMin, 0);
         const newTotalMin = prevMin + totalMin;
-        const overtime = Math.max(0, newTotalMin - dailyMin);
+        const overtime = Math.max(0, newTotalMin - dayTargetMin);
         const prevOvertime = todayRecords.reduce((s, r) => s + r.overtime, 0);
         const thisOvertime = Math.max(0, overtime - prevOvertime);
 
@@ -424,11 +507,12 @@
 
     // ─── Render: Today ───────────────────────────────────────
     function renderTodaySummary() {
-        const today = dateStr(new Date());
+        const now = new Date();
+        const today = dateStr(now);
         const recs = data.records.filter(r => r.date === today);
         const totalMin = recs.reduce((s, r) => s + r.totalMin, 0);
-        const dailyMin = data.settings.dailyHours * 60;
-        const extra = Math.max(0, totalMin - dailyMin);
+        const dayTargetMin = getDayTargetMin(now);
+        const extra = Math.max(0, totalMin - dayTargetMin);
 
         dom.todayWorked.textContent = formatDur(totalMin);
         dom.todayExtra.textContent = formatDur(extra);
@@ -476,12 +560,15 @@
         let html = '';
         Object.keys(groups).forEach(date => {
             const d = parseDate(date);
+            const isFri = d.getDay() === 5;
             const dayLabel = isToday(date) ? 'Hoy' : isYesterday(date) ? 'Ayer' : formatDateLabel(d);
             const recs = groups[date];
             const dayTotal = recs.reduce((s, r) => s + r.totalMin, 0);
+            const dayTarget = getDayTargetMin(date);
+            const friBadge = isFri ? ' · Viernes' : '';
 
             html += `<div class="history-date-group animate-in">
-                <div class="history-date">${dayLabel} · ${formatDur(dayTotal)}</div>
+                <div class="history-date">${dayLabel}${friBadge} · ${formatDur(dayTotal)}</div>
                 <div class="history-card">`;
 
             recs.forEach(r => {
@@ -633,9 +720,16 @@
         const totalMin = recs.reduce((s, r) => s + r.totalMin, 0);
         const workedDays = Object.keys(byDate).length;
         const avgMin = workedDays > 0 ? Math.round(totalMin / workedDays) : 0;
-        const expectedMin = currentPeriod === 'week'
-            ? data.settings.weeklyHours * 60
-            : data.settings.dailyHours * 60 * workedDays;
+
+        // Calculate expected target considering Fridays
+        let expectedMin = 0;
+        if (currentPeriod === 'week') {
+            expectedMin = data.settings.weeklyHours * 60;
+        } else {
+            Object.keys(byDate).forEach(d => {
+                expectedMin += getDayTargetMin(d);
+            });
+        }
         const extraMin = Math.max(0, totalMin - expectedMin);
 
         dom.statTotal.textContent = formatDurShort(totalMin);
@@ -652,24 +746,24 @@
     }
 
     function renderWeekChart(startDate, byDate, labels) {
-        const dailyTarget = data.settings.dailyHours * 60;
-        let maxVal = dailyTarget;
-        const values = [];
+        let maxVal = 10 * 60; // Base reference
+        const items = [];
 
         for (let i = 0; i < 7; i++) {
             const d = new Date(startDate);
             d.setDate(startDate.getDate() + i);
             const key = dateStr(d);
             const val = byDate[key] || 0;
-            values.push(val);
+            const target = getDayTargetMin(d);
+            items.push({ val, target });
             if (val > maxVal) maxVal = val;
         }
 
-        dom.barChart.innerHTML = values.map((v, i) => {
-            const pct = maxVal > 0 ? (v / maxVal) * 100 : 0;
-            const isOver = v > dailyTarget;
+        dom.barChart.innerHTML = items.map((item, i) => {
+            const pct = maxVal > 0 ? (item.val / maxVal) * 100 : 0;
+            const isOver = item.val > item.target && item.target > 0;
             return `<div class="bar-col">
-                <span class="bar-val">${v > 0 ? formatDurShort(v) : ''}</span>
+                <span class="bar-val">${item.val > 0 ? formatDurShort(item.val) : ''}</span>
                 <div class="bar ${isOver ? 'overtime' : ''}" style="height:${Math.max(pct, 3)}%"></div>
                 <span class="bar-day">${labels[i]}</span>
             </div>`;
@@ -705,31 +799,37 @@
         }).join('');
     }
 
-    // ─── Settings ────────────────────────────────────────────
+    // ─── Settings ────────────────────────────────────
     function applySettings() {
         if (dom.cfgWorkStart) dom.cfgWorkStart.value = data.settings.workStart || '09:00';
         if (dom.cfgWorkEnd) dom.cfgWorkEnd.value = data.settings.workEnd || '19:00';
-        dom.cfgDailyH.value = data.settings.dailyHours || 10;
-        dom.cfgWeeklyH.value = data.settings.weeklyHours || 50;
-        dom.cfgSheetsUrl.value = data.settings.sheetsUrl || '';
+        if (dom.cfgDailyH) dom.cfgDailyH.value = data.settings.dailyHours || 10;
+
+        if (dom.cfgFridayStart) dom.cfgFridayStart.value = data.settings.fridayStart || '09:00';
+        if (dom.cfgFridayEnd) dom.cfgFridayEnd.value = data.settings.fridayEnd || '15:00';
+        if (dom.cfgFridayH) dom.cfgFridayH.value = data.settings.fridayHours || 6;
+
+        if (dom.cfgWeeklyH) dom.cfgWeeklyH.value = data.settings.weeklyHours || 46;
+        if (dom.cfgSheetsUrl) dom.cfgSheetsUrl.value = data.settings.sheetsUrl || '';
         updateScheduleBadge();
     }
 
     function recalcOvertime() {
-        const dailyMin = data.settings.dailyHours * 60;
         const byDate = {};
         data.records.forEach(r => {
             if (!byDate[r.date]) byDate[r.date] = [];
             byDate[r.date].push(r);
         });
-        Object.values(byDate).forEach(dayRecs => {
+
+        Object.entries(byDate).forEach(([dateStrKey, dayRecs]) => {
+            const dayTargetMin = getDayTargetMin(dateStrKey);
             let cumul = 0;
             dayRecs.sort((a, b) => a.checkIn.localeCompare(b.checkIn));
             dayRecs.forEach(r => {
                 const prev = cumul;
                 cumul += r.totalMin;
-                if (cumul > dailyMin) {
-                    r.overtime = Math.max(0, cumul - Math.max(dailyMin, prev));
+                if (cumul > dayTargetMin) {
+                    r.overtime = Math.max(0, cumul - Math.max(dayTargetMin, prev));
                 } else {
                     r.overtime = 0;
                 }
