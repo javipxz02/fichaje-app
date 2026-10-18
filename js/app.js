@@ -79,6 +79,7 @@
         editCheckIn: $('#editCheckIn'),
         editCheckOut: $('#editCheckOut'),
         editCalcBadge: $('#editCalcBadge'),
+        editLunchMin: $('#editLunchMin'),
         btnSaveEdit: $('#btnSaveEdit'),
         btnDeleteRecord: $('#btnDeleteRecord'),
     };
@@ -381,6 +382,8 @@
         data.session = {
             checkIn: now.toISOString(),
             inLunch: false,
+            lunchStart: null,
+            lunchMin: 0,
         };
         save();
         setClockUI(true);
@@ -396,6 +399,13 @@
         const totalMin = Math.round((checkOut - checkIn) / 60000);
         const dayTargetMin = getDayTargetMin(checkOut);
 
+        // Finalize lunch if clocked out while in lunch
+        if (data.session.inLunch && data.session.lunchStart) {
+            const elapsed = Math.round((checkOut - new Date(data.session.lunchStart)) / 60000);
+            data.session.lunchMin = (data.session.lunchMin || 0) + Math.max(0, elapsed);
+        }
+        const lunchMin = data.session.lunchMin || 0;
+
         // Calculate today's total to determine overtime
         const todayStr = dateStr(checkOut);
         const todayRecords = data.records.filter(r => r.date === todayStr);
@@ -410,6 +420,7 @@
             date: todayStr,
             checkIn: timeStr(checkIn),
             checkOut: timeStr(checkOut),
+            lunchMin: lunchMin,
             totalMin,
             overtime: thisOvertime,
             synced: false,
@@ -438,18 +449,29 @@
         }
     }
 
-    // ─── Lunch Option (Sigue contando) ───────────────────────
+    // ─── Lunch Option (Sigue contando y acumula minutos) ─────
     function toggleLunch() {
         if (!data.session) return;
-        data.session.inLunch = !data.session.inLunch;
-        save();
-        setLunchUI(data.session.inLunch);
+        const now = new Date();
 
-        if (data.session.inLunch) {
+        if (!data.session.inLunch) {
+            data.session.inLunch = true;
+            data.session.lunchStart = now.toISOString();
+            save();
+            setLunchUI(true);
             toast('🍽️ En comida (el tiempo sigue contando)');
             if (navigator.vibrate) navigator.vibrate(20);
         } else {
-            toast('💼 De vuelta al trabajo');
+            if (data.session.lunchStart) {
+                const elapsed = Math.round((now - new Date(data.session.lunchStart)) / 60000);
+                data.session.lunchMin = (data.session.lunchMin || 0) + Math.max(0, elapsed);
+            }
+            data.session.inLunch = false;
+            data.session.lunchStart = null;
+            save();
+            setLunchUI(false);
+            const totalLunch = data.session.lunchMin || 0;
+            toast(`💼 De vuelta al trabajo (${formatDur(totalLunch)} comida)`);
             if (navigator.vibrate) navigator.vibrate([20, 20]);
         }
     }
@@ -524,7 +546,10 @@
 
         dom.todayRecords.innerHTML = recs.map(r => `
             <div class="record-row" data-id="${r.id}" title="Toca para editar">
-                <span class="record-time">${r.checkIn} → ${r.checkOut}</span>
+                <div>
+                    <span class="record-time">${r.checkIn} → ${r.checkOut}</span>
+                    ${r.lunchMin > 0 ? `<br><span class="record-lunch">🍽️ ${formatDur(r.lunchMin)} comida</span>` : ''}
+                </div>
                 <div class="history-item-right">
                     <span class="record-dur">${formatDur(r.totalMin)}</span>
                     <svg class="edit-hint-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -572,13 +597,14 @@
                 <div class="history-card">`;
 
             recs.forEach(r => {
-                let extraHtml = '';
-                if (r.overtime > 0) extraHtml = `<span class="history-item-extra">+${formatDur(r.overtime)} extra</span>`;
+                let badges = [];
+                if (r.overtime > 0) badges.push(`<span class="history-item-extra">+${formatDur(r.overtime)} extra</span>`);
+                if (r.lunchMin > 0) badges.push(`<span class="history-item-lunch">🍽️ ${formatDur(r.lunchMin)} comida</span>`);
 
                 html += `<div class="history-item" data-id="${r.id}" title="Toca para editar">
                     <div class="history-item-left">
                         <span class="history-item-time">${r.checkIn} → ${r.checkOut}</span>
-                        ${extraHtml}
+                        ${badges.length > 0 ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${badges.join('')}</div>` : ''}
                     </div>
                     <div class="history-item-right">
                         <span class="history-item-dur">${formatDur(r.totalMin)}</span>
@@ -609,6 +635,9 @@
         dom.editDate.value = record.date;
         dom.editCheckIn.value = record.checkIn;
         dom.editCheckOut.value = record.checkOut;
+        if (dom.editLunchMin) {
+            dom.editLunchMin.value = record.lunchMin || 0;
+        }
         updateEditPreview();
 
         dom.editModalOverlay.classList.add('show');
@@ -643,6 +672,7 @@
         const newDate = dom.editDate.value;
         const newIn = dom.editCheckIn.value;
         const newOut = dom.editCheckOut.value;
+        const newLunch = dom.editLunchMin ? (parseInt(dom.editLunchMin.value, 10) || 0) : 0;
 
         if (!newDate || !newIn || !newOut) {
             toast('Por favor completa todos los campos');
@@ -657,6 +687,7 @@
         record.date = newDate;
         record.checkIn = newIn;
         record.checkOut = newOut;
+        record.lunchMin = newLunch;
         record.totalMin = min;
         record.synced = false;
 
@@ -883,10 +914,11 @@
             return;
         }
 
-        const header = 'Fecha,Entrada,Salida,Minutos Totales,Horas Totales,Minutos Extra,Horas Extra\n';
-        const rows = data.records.map(r =>
-            `${r.date},${r.checkIn},${r.checkOut},${r.totalMin},${(r.totalMin / 60).toFixed(2)},${r.overtime},${(r.overtime / 60).toFixed(2)}`
-        ).join('\n');
+        const header = 'Fecha,Entrada,Salida,Minutos Comida,Horas Comida,Minutos Totales,Horas Totales,Minutos Extra,Horas Extra\n';
+        const rows = data.records.map(r => {
+            const lm = r.lunchMin || 0;
+            return `${r.date},${r.checkIn},${r.checkOut},${lm},${(lm / 60).toFixed(2)},${r.totalMin},${(r.totalMin / 60).toFixed(2)},${r.overtime},${(r.overtime / 60).toFixed(2)}`;
+        }).join('\n');
 
         const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);

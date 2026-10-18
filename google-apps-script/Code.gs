@@ -1,14 +1,12 @@
 /**
  * FICHAJE – Google Apps Script Backend
  * ====================================
- * 
- * Este script actúa como API para sincronizar los registros
- * de fichaje con una hoja de Google Sheets.
- * Soporta creación, modificación y borrado de registros.
+ * Soporta registro de entrada/salida, tiempo de comida,
+ * cálculo de horas totales y horas extra.
  */
 
-// Nombre de la hoja donde se guardarán los datos
 const SHEET_NAME = 'Fichajes';
+const HEADERS = ['ID', 'Fecha', 'Entrada', 'Salida', 'Comida (min)', 'Comida (h)', 'Min. Totales', 'Horas Totales', 'Min. Extra', 'Horas Extra'];
 
 /**
  * Maneja las solicitudes GET (consultar registros)
@@ -59,9 +57,9 @@ function fullSyncRecords(records) {
     const sheet = getOrCreateSheet();
     const lastRow = sheet.getLastRow();
     
-    // Limpiar filas anteriores (respetando la fila 1 de encabezados)
+    // Limpiar filas anteriores (manteniendo la fila 1 de encabezados)
     if (lastRow > 1) {
-        sheet.getRange(2, 1, lastRow - 1, 8).clearContent();
+        sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
     }
     
     if (!records || records.length === 0) {
@@ -71,23 +69,31 @@ function fullSyncRecords(records) {
     // Ordenar de más reciente a más antiguo
     const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date) || b.checkIn.localeCompare(a.checkIn));
     
-    const rows = sorted.map(r => [
-        r.id,
-        r.date,
-        r.checkIn,
-        r.checkOut,
-        r.totalMin,
-        parseFloat((r.totalMin / 60).toFixed(2)),
-        r.overtime || 0,
-        parseFloat(((r.overtime || 0) / 60).toFixed(2))
-    ]);
+    const rows = sorted.map(r => {
+        const lunchMin = r.lunchMin || 0;
+        const lunchHours = parseFloat((lunchMin / 60).toFixed(2));
+        const totalHours = parseFloat((r.totalMin / 60).toFixed(2));
+        const overtimeHours = parseFloat(((r.overtime || 0) / 60).toFixed(2));
+        return [
+            r.id,
+            r.date,
+            r.checkIn,
+            r.checkOut,
+            lunchMin,
+            lunchHours,
+            r.totalMin,
+            totalHours,
+            r.overtime || 0,
+            overtimeHours
+        ];
+    });
     
-    sheet.getRange(2, 1, rows.length, 8).setValues(rows);
+    sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
     return jsonResponse({ status: 'ok', total: rows.length });
 }
 
 /**
- * Obtiene o crea la hoja con los encabezados correctos
+ * Obtiene o crea la hoja con los encabezados y estilos correctos
  */
 function getOrCreateSheet() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -95,37 +101,37 @@ function getOrCreateSheet() {
     
     if (!sheet) {
         sheet = ss.insertSheet(SHEET_NAME);
-        
-        // Crear encabezados
-        const headers = ['ID', 'Fecha', 'Entrada', 'Salida', 'Min. Totales', 'Horas Totales', 'Min. Extra', 'Horas Extra'];
-        sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-        
-        // Formatear encabezados
-        const headerRange = sheet.getRange(1, 1, 1, headers.length);
-        headerRange.setFontWeight('bold');
-        headerRange.setBackground('#007AFF');
-        headerRange.setFontColor('#FFFFFF');
-        headerRange.setHorizontalAlignment('center');
-        
-        // Ajustar anchos de columna
-        sheet.setColumnWidth(1, 140);  // ID
-        sheet.setColumnWidth(2, 110);  // Fecha
-        sheet.setColumnWidth(3, 80);   // Entrada
-        sheet.setColumnWidth(4, 80);   // Salida
-        sheet.setColumnWidth(5, 100);  // Min. Totales
-        sheet.setColumnWidth(6, 110);  // Horas Totales
-        sheet.setColumnWidth(7, 90);   // Min. Extra
-        sheet.setColumnWidth(8, 100);  // Horas Extra
-        
-        // Congelar primera fila
-        sheet.setFrozenRows(1);
     }
+    
+    // Asegurar encabezados actualizados
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    
+    // Formato de encabezados
+    const headerRange = sheet.getRange(1, 1, 1, HEADERS.length);
+    headerRange.setFontWeight('bold');
+    headerRange.setBackground('#007AFF');
+    headerRange.setFontColor('#FFFFFF');
+    headerRange.setHorizontalAlignment('center');
+    
+    // Anchos de columna
+    sheet.setColumnWidth(1, 140);  // ID
+    sheet.setColumnWidth(2, 110);  // Fecha
+    sheet.setColumnWidth(3, 80);   // Entrada
+    sheet.setColumnWidth(4, 80);   // Salida
+    sheet.setColumnWidth(5, 100);  // Comida (min)
+    sheet.setColumnWidth(6, 100);  // Comida (h)
+    sheet.setColumnWidth(7, 100);  // Min. Totales
+    sheet.setColumnWidth(8, 110);  // Horas Totales
+    sheet.setColumnWidth(9, 90);   // Min. Extra
+    sheet.setColumnWidth(10, 100); // Horas Extra
+    
+    sheet.setFrozenRows(1);
     
     return sheet;
 }
 
 /**
- * Crea una respuesta JSON con los headers CORS correctos
+ * Respuesta JSON
  */
 function jsonResponse(obj) {
     return ContentService
