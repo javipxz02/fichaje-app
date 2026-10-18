@@ -1,10 +1,11 @@
 const CACHE_NAME = 'fichaje-v1';
 const ASSETS = [
-    '/',
-    '/index.html',
-    '/css/styles.css',
-    '/js/app.js',
-    '/manifest.json'
+    './',
+    './index.html',
+    './css/styles.css',
+    './js/app.js',
+    './manifest.json',
+    './icons/icon.svg'
 ];
 
 // Install — cache static assets

@@ -2,7 +2,7 @@
     "name": "Fichaje - Control de Horas",
     "short_name": "Fichaje",
     "description": "App de fichaje personal para controlar horas trabajadas y horas extra",
-    "start_url": "/",
+    "start_url": "./",
     "display": "standalone",
     "orientation": "portrait",
     "background_color": "#F2F2F7",
