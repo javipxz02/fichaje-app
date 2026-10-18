@@ -15,6 +15,7 @@
     let data = loadData();
     let timerInterval = null;
     let currentPeriod = 'week';
+    let editingRecordId = null;
 
     // ─── DOM refs ────────────────────────────────────────────
     const $ = (s) => document.querySelector(s);
@@ -29,12 +30,15 @@
         timerH: $('#timerH'),
         timerM: $('#timerM'),
         timerS: $('#timerS'),
+        schedulePillText: $('#schedulePillText'),
         clockBtn: $('#clockBtn'),
         clockFace: $('#clockFace'),
         clockLabel: $('#clockLabel'),
         iconPlay: $('#iconPlay'),
         iconStop: $('#iconStop'),
         clockRing: $('#clockRing'),
+        lunchBtn: $('#lunchBtn'),
+        lunchText: $('#lunchText'),
         todayWorked: $('#todayWorked'),
         todayExtra: $('#todayExtra'),
         todayRecords: $('#todayRecords'),
@@ -47,6 +51,8 @@
         chartTitle: $('#chartTitle'),
         barChart: $('#barChart'),
         segmentIndicator: $('#segmentIndicator'),
+        cfgWorkStart: $('#cfgWorkStart'),
+        cfgWorkEnd: $('#cfgWorkEnd'),
         cfgDailyH: $('#cfgDailyH'),
         cfgWeeklyH: $('#cfgWeeklyH'),
         cfgSheetsUrl: $('#cfgSheetsUrl'),
@@ -61,6 +67,15 @@
         modalText: $('#modalText'),
         modalCancel: $('#modalCancel'),
         modalConfirm: $('#modalConfirm'),
+        // Edit record modal
+        editModalOverlay: $('#editModalOverlay'),
+        editModalClose: $('#editModalClose'),
+        editDate: $('#editDate'),
+        editCheckIn: $('#editCheckIn'),
+        editCheckOut: $('#editCheckOut'),
+        editCalcBadge: $('#editCalcBadge'),
+        btnSaveEdit: $('#btnSaveEdit'),
+        btnDeleteRecord: $('#btnDeleteRecord'),
     };
 
     // ─── Init ────────────────────────────────────────────────
@@ -78,8 +93,14 @@
     // ─── Data / Storage ──────────────────────────────────────
     function defaultData() {
         return {
-            settings: { dailyHours: 8, weeklyHours: 40, sheetsUrl: '' },
-            session: null,          // { checkIn: ISO string } or null
+            settings: {
+                workStart: '09:00',
+                workEnd: '19:00',
+                dailyHours: 10,
+                weeklyHours: 50,
+                sheetsUrl: '',
+            },
+            session: null,          // { checkIn: ISO, inLunch: boolean }
             records: [],            // { id, date, checkIn, checkOut, totalMin, overtime, synced }
         };
     }
@@ -89,9 +110,27 @@
             const raw = localStorage.getItem(STORAGE_KEY);
             if (!raw) return defaultData();
             const parsed = JSON.parse(raw);
-            // Merge with defaults for forward compatibility
-            return { ...defaultData(), ...parsed, settings: { ...defaultData().settings, ...parsed.settings } };
-        } catch { return defaultData(); }
+            const defaults = defaultData();
+
+            // Forward-compatibility migration: ensure 9:00-19:00 (10h) default
+            const settings = { ...defaults.settings, ...parsed.settings };
+            if (!parsed.settings || !parsed.settings.workStart) {
+                settings.workStart = '09:00';
+                settings.workEnd = '19:00';
+                if (settings.dailyHours === 8) {
+                    settings.dailyHours = 10;
+                    settings.weeklyHours = 50;
+                }
+            }
+
+            return {
+                ...defaults,
+                ...parsed,
+                settings,
+            };
+        } catch {
+            return defaultData();
+        }
     }
 
     function save() {
@@ -107,7 +146,15 @@
         dom.headerDate.textContent = `${day}, ${d} ${m}`;
     }
 
-    // ─── Navigation ──────────────────────────────────────────
+    function updateScheduleBadge() {
+        if (!dom.schedulePillText) return;
+        const start = data.settings.workStart || '09:00';
+        const end = data.settings.workEnd || '19:00';
+        const h = data.settings.dailyHours || 10;
+        dom.schedulePillText.textContent = `Horario: ${start} – ${end} (${h}h)`;
+    }
+
+    // ─── Navigation & Events ─────────────────────────────────
     function bindEvents() {
         // Tabs
         $$('.tab').forEach(tab => {
@@ -116,6 +163,11 @@
 
         // Clock button
         dom.clockBtn.addEventListener('click', toggleClock);
+
+        // Lunch button
+        if (dom.lunchBtn) {
+            dom.lunchBtn.addEventListener('click', toggleLunch);
+        }
 
         // Period segment
         $$('.segment').forEach(seg => {
@@ -129,15 +181,28 @@
         });
 
         // Settings inputs
+        if (dom.cfgWorkStart) {
+            dom.cfgWorkStart.addEventListener('change', () => {
+                data.settings.workStart = dom.cfgWorkStart.value || '09:00';
+                recalcScheduleHours();
+            });
+        }
+        if (dom.cfgWorkEnd) {
+            dom.cfgWorkEnd.addEventListener('change', () => {
+                data.settings.workEnd = dom.cfgWorkEnd.value || '19:00';
+                recalcScheduleHours();
+            });
+        }
         dom.cfgDailyH.addEventListener('change', () => {
-            data.settings.dailyHours = parseFloat(dom.cfgDailyH.value) || 8;
+            data.settings.dailyHours = parseFloat(dom.cfgDailyH.value) || 10;
             save();
+            updateScheduleBadge();
             recalcOvertime();
             renderTodaySummary();
             renderStats();
         });
         dom.cfgWeeklyH.addEventListener('change', () => {
-            data.settings.weeklyHours = parseFloat(dom.cfgWeeklyH.value) || 40;
+            data.settings.weeklyHours = parseFloat(dom.cfgWeeklyH.value) || 50;
             save();
         });
         dom.cfgSheetsUrl.addEventListener('change', () => {
@@ -145,7 +210,29 @@
             save();
         });
 
-        // Buttons
+        // Edit Record modal events
+        if (dom.editModalClose) {
+            dom.editModalClose.addEventListener('click', closeEditModal);
+        }
+        if (dom.editCheckIn) {
+            dom.editCheckIn.addEventListener('input', updateEditPreview);
+        }
+        if (dom.editCheckOut) {
+            dom.editCheckOut.addEventListener('input', updateEditPreview);
+        }
+        if (dom.btnSaveEdit) {
+            dom.btnSaveEdit.addEventListener('click', saveRecordEdit);
+        }
+        if (dom.btnDeleteRecord) {
+            dom.btnDeleteRecord.addEventListener('click', deleteCurrentRecord);
+        }
+        if (dom.editModalOverlay) {
+            dom.editModalOverlay.addEventListener('click', (e) => {
+                if (e.target === dom.editModalOverlay) closeEditModal();
+            });
+        }
+
+        // Actions
         dom.btnSync.addEventListener('click', syncSheets);
         dom.btnExport.addEventListener('click', exportCSV);
         dom.btnClear.addEventListener('click', () => {
@@ -162,7 +249,7 @@
             });
         });
 
-        // Modal
+        // General Modal
         dom.modalCancel.addEventListener('click', hideModal);
     }
 
@@ -180,6 +267,23 @@
         if (id === 'stats') renderStats();
     }
 
+    function recalcScheduleHours() {
+        const start = dom.cfgWorkStart.value || '09:00';
+        const end = dom.cfgWorkEnd.value || '19:00';
+        const [sh, sm] = start.split(':').map(Number);
+        const [eh, em] = end.split(':').map(Number);
+        let diffMin = (eh * 60 + em) - (sh * 60 + sm);
+        if (diffMin <= 0) diffMin += 24 * 60;
+        const hours = Math.round((diffMin / 60) * 10) / 10;
+        data.settings.dailyHours = hours;
+        dom.cfgDailyH.value = hours;
+        save();
+        updateScheduleBadge();
+        recalcOvertime();
+        renderTodaySummary();
+        renderStats();
+    }
+
     // ─── Clock In / Out ──────────────────────────────────────
     function toggleClock() {
         if (data.session) {
@@ -191,7 +295,10 @@
 
     function clockIn() {
         const now = new Date();
-        data.session = { checkIn: now.toISOString() };
+        data.session = {
+            checkIn: now.toISOString(),
+            inLunch: false,
+        };
         save();
         setClockUI(true);
         startTimer(now);
@@ -241,8 +348,35 @@
     function restoreSession() {
         if (data.session) {
             setClockUI(true);
+            if (data.session.inLunch) {
+                setLunchUI(true);
+            }
             startTimer(new Date(data.session.checkIn));
         }
+    }
+
+    // ─── Lunch Option (Sigue contando) ───────────────────────
+    function toggleLunch() {
+        if (!data.session) return;
+        data.session.inLunch = !data.session.inLunch;
+        save();
+        setLunchUI(data.session.inLunch);
+
+        if (data.session.inLunch) {
+            toast('🍽️ En comida (el tiempo sigue contando)');
+            if (navigator.vibrate) navigator.vibrate(20);
+        } else {
+            toast('💼 De vuelta al trabajo');
+            if (navigator.vibrate) navigator.vibrate([20, 20]);
+        }
+    }
+
+    function setLunchUI(isLunch) {
+        if (!dom.lunchBtn) return;
+        dom.lunchBtn.classList.toggle('active', isLunch);
+        dom.lunchText.textContent = isLunch ? 'Volver de comida' : 'Ir a comida';
+        dom.statusPill.classList.toggle('lunch', isLunch);
+        dom.statusText.textContent = isLunch ? 'En comida (contando)' : (data.session ? 'Trabajando' : 'Sin fichar');
     }
 
     // ─── Timer ───────────────────────────────────────────────
@@ -278,6 +412,14 @@
         dom.clockLabel.textContent = active ? 'Fichar Salida' : 'Fichar Entrada';
         dom.iconPlay.classList.toggle('hidden', active);
         dom.iconStop.classList.toggle('hidden', !active);
+
+        // Lunch button visibility
+        if (dom.lunchBtn) {
+            dom.lunchBtn.classList.toggle('hidden', !active);
+            if (!active) {
+                setLunchUI(false);
+            }
+        }
     }
 
     // ─── Render: Today ───────────────────────────────────────
@@ -297,11 +439,21 @@
         }
 
         dom.todayRecords.innerHTML = recs.map(r => `
-            <div class="record-row">
+            <div class="record-row" data-id="${r.id}" title="Toca para editar">
                 <span class="record-time">${r.checkIn} → ${r.checkOut}</span>
-                <span class="record-dur">${formatDur(r.totalMin)}</span>
+                <div class="history-item-right">
+                    <span class="record-dur">${formatDur(r.totalMin)}</span>
+                    <svg class="edit-hint-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                    </svg>
+                </div>
             </div>
         `).join('');
+
+        // Attach click listeners to edit records
+        dom.todayRecords.querySelectorAll('.record-row').forEach(row => {
+            row.addEventListener('click', () => openEditModal(row.dataset.id));
+        });
     }
 
     // ─── Render: History ─────────────────────────────────────
@@ -327,8 +479,6 @@
             const dayLabel = isToday(date) ? 'Hoy' : isYesterday(date) ? 'Ayer' : formatDateLabel(d);
             const recs = groups[date];
             const dayTotal = recs.reduce((s, r) => s + r.totalMin, 0);
-            const dayExtra = Math.max(0, dayTotal - data.settings.dailyHours * 60);
-            const deficit = dayTotal < data.settings.dailyHours * 60 ? data.settings.dailyHours * 60 - dayTotal : 0;
 
             html += `<div class="history-date-group animate-in">
                 <div class="history-date">${dayLabel} · ${formatDur(dayTotal)}</div>
@@ -338,12 +488,17 @@
                 let extraHtml = '';
                 if (r.overtime > 0) extraHtml = `<span class="history-item-extra">+${formatDur(r.overtime)} extra</span>`;
 
-                html += `<div class="history-item">
+                html += `<div class="history-item" data-id="${r.id}" title="Toca para editar">
                     <div class="history-item-left">
                         <span class="history-item-time">${r.checkIn} → ${r.checkOut}</span>
                         ${extraHtml}
                     </div>
-                    <span class="history-item-dur">${formatDur(r.totalMin)}</span>
+                    <div class="history-item-right">
+                        <span class="history-item-dur">${formatDur(r.totalMin)}</span>
+                        <svg class="edit-hint-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                        </svg>
+                    </div>
                 </div>`;
             });
 
@@ -351,6 +506,98 @@
         });
 
         dom.historyList.innerHTML = html;
+
+        // Attach click to edit
+        dom.historyList.querySelectorAll('.history-item').forEach(item => {
+            item.addEventListener('click', () => openEditModal(item.dataset.id));
+        });
+    }
+
+    // ─── Edit Record Modal ───────────────────────────────────
+    function openEditModal(id) {
+        const record = data.records.find(r => r.id === id);
+        if (!record) return;
+
+        editingRecordId = id;
+        dom.editDate.value = record.date;
+        dom.editCheckIn.value = record.checkIn;
+        dom.editCheckOut.value = record.checkOut;
+        updateEditPreview();
+
+        dom.editModalOverlay.classList.add('show');
+    }
+
+    function closeEditModal() {
+        dom.editModalOverlay.classList.remove('show');
+        editingRecordId = null;
+    }
+
+    function updateEditPreview() {
+        const inVal = dom.editCheckIn.value;
+        const outVal = dom.editCheckOut.value;
+        if (!inVal || !outVal) {
+            dom.editCalcBadge.textContent = 'Duración: --';
+            return;
+        }
+
+        const [ih, im] = inVal.split(':').map(Number);
+        const [oh, om] = outVal.split(':').map(Number);
+        let min = (oh * 60 + om) - (ih * 60 + im);
+        if (min < 0) min += 24 * 60; // Overnight shift support
+
+        dom.editCalcBadge.textContent = `Duración: ${formatDur(min)}`;
+    }
+
+    function saveRecordEdit() {
+        if (!editingRecordId) return;
+        const record = data.records.find(r => r.id === editingRecordId);
+        if (!record) return;
+
+        const newDate = dom.editDate.value;
+        const newIn = dom.editCheckIn.value;
+        const newOut = dom.editCheckOut.value;
+
+        if (!newDate || !newIn || !newOut) {
+            toast('Por favor completa todos los campos');
+            return;
+        }
+
+        const [ih, im] = newIn.split(':').map(Number);
+        const [oh, om] = newOut.split(':').map(Number);
+        let min = (oh * 60 + om) - (ih * 60 + im);
+        if (min < 0) min += 24 * 60;
+
+        record.date = newDate;
+        record.checkIn = newIn;
+        record.checkOut = newOut;
+        record.totalMin = min;
+        record.synced = false;
+
+        recalcOvertime();
+        save();
+
+        closeEditModal();
+        renderTodaySummary();
+        renderHistory();
+        renderStats();
+        toast('✓ Registro modificado');
+    }
+
+    function deleteCurrentRecord() {
+        if (!editingRecordId) return;
+        const idToDelete = editingRecordId;
+
+        showModal('¿Eliminar este registro de fichaje?', () => {
+            data.records = data.records.filter(r => r.id !== idToDelete);
+            recalcOvertime();
+            save();
+
+            closeEditModal();
+            renderTodaySummary();
+            renderHistory();
+            renderStats();
+            toast('✓ Registro eliminado');
+        });
     }
 
     // ─── Render: Stats ───────────────────────────────────────
@@ -430,15 +677,12 @@
     }
 
     function renderMonthChart(startDate, endDate, byDate) {
-        // Group by week
-        const dailyTarget = data.settings.dailyHours * 60;
         const weeks = [];
         let current = new Date(startDate);
         let weekNum = 1;
 
         while (current <= endDate) {
             let weekTotal = 0;
-            const weekStart = new Date(current);
             for (let i = 0; i < 7 && current <= endDate; i++, current.setDate(current.getDate() + 1)) {
                 weekTotal += byDate[dateStr(current)] || 0;
             }
@@ -463,14 +707,16 @@
 
     // ─── Settings ────────────────────────────────────────────
     function applySettings() {
-        dom.cfgDailyH.value = data.settings.dailyHours;
-        dom.cfgWeeklyH.value = data.settings.weeklyHours;
+        if (dom.cfgWorkStart) dom.cfgWorkStart.value = data.settings.workStart || '09:00';
+        if (dom.cfgWorkEnd) dom.cfgWorkEnd.value = data.settings.workEnd || '19:00';
+        dom.cfgDailyH.value = data.settings.dailyHours || 10;
+        dom.cfgWeeklyH.value = data.settings.weeklyHours || 50;
         dom.cfgSheetsUrl.value = data.settings.sheetsUrl || '';
+        updateScheduleBadge();
     }
 
     function recalcOvertime() {
         const dailyMin = data.settings.dailyHours * 60;
-        // Group records by date and recalc overtime
         const byDate = {};
         data.records.forEach(r => {
             if (!byDate[r.date]) byDate[r.date] = [];
@@ -480,12 +726,12 @@
             let cumul = 0;
             dayRecs.sort((a, b) => a.checkIn.localeCompare(b.checkIn));
             dayRecs.forEach(r => {
+                const prev = cumul;
                 cumul += r.totalMin;
-                r.overtime = Math.max(0, cumul - dailyMin);
-                if (cumul - r.totalMin >= dailyMin) {
-                    r.overtime = r.totalMin; // whole block is overtime
+                if (cumul > dailyMin) {
+                    r.overtime = Math.max(0, cumul - Math.max(dailyMin, prev));
                 } else {
-                    r.overtime = Math.max(0, cumul - dailyMin);
+                    r.overtime = 0;
                 }
             });
         });
@@ -503,27 +749,21 @@
         dom.syncBar.classList.add('show');
         dom.syncMsg.textContent = 'Sincronizando…';
 
-        const unsynced = data.records.filter(r => !r.synced);
-        if (unsynced.length === 0) {
-            dom.syncMsg.textContent = 'Todo sincronizado ✓';
-            setTimeout(() => dom.syncBar.classList.remove('show'), 2000);
-            return;
-        }
-
         try {
+            // Send full current records to ensure edits and deletes reflect in Sheets
             const resp = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({ action: 'sync', records: unsynced }),
+                body: JSON.stringify({ action: 'full_sync', records: data.records }),
             });
 
             if (!resp.ok) throw new Error('Error ' + resp.status);
 
             const result = await resp.json();
             if (result.status === 'ok') {
-                unsynced.forEach(r => r.synced = true);
+                data.records.forEach(r => r.synced = true);
                 save();
-                dom.syncMsg.textContent = `${unsynced.length} registro(s) sincronizado(s) ✓`;
+                dom.syncMsg.textContent = `${data.records.length} registro(s) sincronizado(s) ✓`;
                 toast('Sincronización completada');
             } else {
                 throw new Error(result.message || 'Error desconocido');
@@ -567,7 +807,6 @@
     }
 
     // ─── Modal ───────────────────────────────────────────────
-    let _modalResolve = null;
     function showModal(text, onConfirm) {
         dom.modalText.textContent = text;
         dom.modalOverlay.classList.add('show');
@@ -623,4 +862,3 @@
     // ─── Boot ────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', init);
 })();
-

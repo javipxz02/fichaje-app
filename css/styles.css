@@ -655,3 +655,151 @@ a { color: var(--accent); text-decoration: none; }
     .stat-value { font-size: 22px; }
 }
 
+/* ---------- Schedule Pill ---------- */
+.schedule-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 100px;
+    background: var(--card);
+    box-shadow: var(--shadow);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text2);
+    margin-bottom: 20px;
+}
+.schedule-icon { color: var(--accent); }
+
+/* ---------- Lunch Button ---------- */
+.lunch-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    border-radius: 100px;
+    background: var(--card);
+    border: 1px solid var(--sep);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: var(--shadow);
+    transition: transform .15s, background .2s, border-color .2s;
+    margin-top: 6px;
+}
+.lunch-btn:active { transform: scale(.95); }
+.lunch-btn.hidden { display: none !important; }
+.lunch-btn.active {
+    background: rgba(255,149,0,.12);
+    color: var(--orange);
+    border-color: rgba(255,149,0,.3);
+}
+.status-pill.lunch .status-dot {
+    background: var(--orange);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* ---------- Editable Records ---------- */
+.record-row, .history-item {
+    cursor: pointer;
+    transition: background .15s;
+    border-radius: var(--radius-xs);
+}
+.record-row:active, .history-item:active {
+    background: var(--card-hover);
+}
+.history-item-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.edit-hint-icon {
+    opacity: .35;
+    transition: opacity .2s;
+}
+.history-item:hover .edit-hint-icon,
+.record-row:hover .edit-hint-icon {
+    opacity: 1;
+}
+
+/* ---------- Edit Record Modal ---------- */
+.edit-modal {
+    max-width: 360px;
+    padding: 22px;
+    border-radius: 20px;
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+.modal-title {
+    font-size: 18px;
+    font-weight: 600;
+}
+.modal-close {
+    font-size: 24px;
+    line-height: 1;
+    color: var(--text3);
+    padding: 4px;
+}
+.modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: left;
+}
+.field-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+.modal-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.edit-calc-badge {
+    background: var(--bg);
+    padding: 10px 12px;
+    border-radius: var(--radius-xs);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.modal-actions-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.modal-action-btn {
+    width: 100%;
+    padding: 13px;
+    border-radius: var(--radius-xs);
+    font-size: 15px;
+    font-weight: 600;
+    text-align: center;
+    transition: transform .15s, opacity .2s;
+}
+.modal-action-btn:active { transform: scale(.97); }
+.modal-action-btn.primary {
+    background: var(--accent);
+    color: #fff;
+}
+.modal-action-btn.danger {
+    background: rgba(255,59,48,.1);
+    color: var(--red);
+}
+
+

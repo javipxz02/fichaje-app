@@ -46,6 +46,14 @@
                         <span class="timer-digit" id="timerS">00</span>
                     </div>
 
+                    <!-- Schedule badge -->
+                    <div class="schedule-pill" id="schedulePill">
+                        <svg class="schedule-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        <span id="schedulePillText">Horario: 09:00 – 19:00 (10h)</span>
+                    </div>
+
                     <!-- Clock button -->
                     <div class="clock-btn-wrap">
                         <button class="clock-btn" id="clockBtn" aria-label="Fichar entrada">
@@ -62,6 +70,12 @@
                             </span>
                         </button>
                         <span class="clock-label" id="clockLabel">Fichar Entrada</span>
+
+                        <!-- Lunch button (visible when working) -->
+                        <button class="lunch-btn hidden" id="lunchBtn" aria-label="Ir a comida">
+                            <span class="lunch-icon">🍽️</span>
+                            <span class="lunch-text" id="lunchText">Ir a comida</span>
+                        </button>
                     </div>
 
                     <!-- Today card -->
@@ -144,12 +158,20 @@
                         <h3 class="group-title">Jornada laboral</h3>
                         <div class="group-list">
                             <label class="setting-row">
+                                <span>Hora inicio habitual</span>
+                                <input type="time" id="cfgWorkStart" value="09:00" class="setting-input">
+                            </label>
+                            <label class="setting-row">
+                                <span>Hora fin habitual</span>
+                                <input type="time" id="cfgWorkEnd" value="19:00" class="setting-input">
+                            </label>
+                            <label class="setting-row">
                                 <span>Horas por día</span>
-                                <input type="number" id="cfgDailyH" value="8" min="1" max="24" step="0.5" class="setting-input">
+                                <input type="number" id="cfgDailyH" value="10" min="1" max="24" step="0.5" class="setting-input">
                             </label>
                             <label class="setting-row">
                                 <span>Horas por semana</span>
-                                <input type="number" id="cfgWeeklyH" value="40" min="1" max="168" step="0.5" class="setting-input">
+                                <input type="number" id="cfgWeeklyH" value="50" min="1" max="168" step="0.5" class="setting-input">
                             </label>
                         </div>
                     </div>
@@ -234,6 +256,39 @@
                 <div class="modal-actions">
                     <button class="modal-btn cancel" id="modalCancel">Cancelar</button>
                     <button class="modal-btn confirm" id="modalConfirm">Confirmar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Record Modal -->
+        <div class="modal-overlay" id="editModalOverlay">
+            <div class="modal edit-modal" id="editModal">
+                <div class="modal-header">
+                    <h3 class="modal-title">Editar Fichaje</h3>
+                    <button class="modal-close" id="editModalClose" aria-label="Cerrar">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <label class="modal-field">
+                        <span class="field-label">Fecha</span>
+                        <input type="date" id="editDate" class="setting-input full">
+                    </label>
+                    <div class="modal-row">
+                        <label class="modal-field">
+                            <span class="field-label">Entrada</span>
+                            <input type="time" id="editCheckIn" class="setting-input full">
+                        </label>
+                        <label class="modal-field">
+                            <span class="field-label">Salida</span>
+                            <input type="time" id="editCheckOut" class="setting-input full">
+                        </label>
+                    </div>
+                    <div class="edit-calc-badge" id="editCalcBadge">
+                        Duración: 0h 0min
+                    </div>
+                </div>
+                <div class="modal-actions-stack">
+                    <button class="modal-action-btn primary" id="btnSaveEdit">Guardar cambios</button>
+                    <button class="modal-action-btn danger" id="btnDeleteRecord">Eliminar registro</button>
                 </div>
             </div>
         </div>

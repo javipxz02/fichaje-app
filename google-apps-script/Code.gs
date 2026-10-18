@@ -4,16 +4,7 @@
  * 
  * Este script actúa como API para sincronizar los registros
  * de fichaje con una hoja de Google Sheets.
- * 
- * INSTALACIÓN:
- * 1. Crea una nueva hoja de cálculo en Google Sheets
- * 2. Ve a Extensiones → Apps Script
- * 3. Pega este código en el editor (reemplaza todo el contenido)
- * 4. Haz clic en "Implementar" → "Nueva implementación"
- * 5. Tipo: "Aplicación web"
- * 6. Ejecutar como: "Yo" (tu cuenta)
- * 7. Acceso: "Cualquiera" (para que la PWA pueda conectar)
- * 8. Copia la URL y pégala en los Ajustes de la app Fichaje
+ * Soporta creación, modificación y borrado de registros.
  */
 
 // Nombre de la hoja donde se guardarán los datos
@@ -51,8 +42,8 @@ function doPost(e) {
     try {
         const body = JSON.parse(e.postData.contents);
         
-        if (body.action === 'sync') {
-            return syncRecords(body.records || []);
+        if (body.action === 'full_sync' || body.action === 'sync') {
+            return fullSyncRecords(body.records || []);
         }
         
         return jsonResponse({ status: 'error', message: 'Acción no reconocida' });
@@ -62,50 +53,37 @@ function doPost(e) {
 }
 
 /**
- * Sincroniza registros: añade los nuevos a la hoja
+ * Sincronización completa: actualiza, modifica y borra según los datos de la app
  */
-function syncRecords(records) {
-    if (!records || records.length === 0) {
-        return jsonResponse({ status: 'ok', added: 0 });
-    }
-    
+function fullSyncRecords(records) {
     const sheet = getOrCreateSheet();
-    const existingData = sheet.getDataRange().getValues();
+    const lastRow = sheet.getLastRow();
     
-    // Obtener IDs existentes para evitar duplicados
-    const idCol = 0; // Columna A = ID
-    const existingIds = new Set();
-    for (let i = 1; i < existingData.length; i++) {
-        existingIds.add(existingData[i][idCol]);
+    // Limpiar filas anteriores (respetando la fila 1 de encabezados)
+    if (lastRow > 1) {
+        sheet.getRange(2, 1, lastRow - 1, 8).clearContent();
     }
     
-    let added = 0;
-    records.forEach(r => {
-        if (!existingIds.has(r.id)) {
-            const totalHours = (r.totalMin / 60).toFixed(2);
-            const overtimeHours = (r.overtime / 60).toFixed(2);
-            
-            sheet.appendRow([
-                r.id,
-                r.date,
-                r.checkIn,
-                r.checkOut,
-                r.totalMin,
-                parseFloat(totalHours),
-                r.overtime,
-                parseFloat(overtimeHours),
-            ]);
-            added++;
-        }
-    });
-    
-    // Ordenar por fecha descendente (más reciente arriba)
-    if (added > 0 && sheet.getLastRow() > 2) {
-        const range = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn());
-        range.sort({ column: 2, ascending: false });
+    if (!records || records.length === 0) {
+        return jsonResponse({ status: 'ok', total: 0 });
     }
     
-    return jsonResponse({ status: 'ok', added });
+    // Ordenar de más reciente a más antiguo
+    const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date) || b.checkIn.localeCompare(a.checkIn));
+    
+    const rows = sorted.map(r => [
+        r.id,
+        r.date,
+        r.checkIn,
+        r.checkOut,
+        r.totalMin,
+        parseFloat((r.totalMin / 60).toFixed(2)),
+        r.overtime || 0,
+        parseFloat(((r.overtime || 0) / 60).toFixed(2))
+    ]);
+    
+    sheet.getRange(2, 1, rows.length, 8).setValues(rows);
+    return jsonResponse({ status: 'ok', total: rows.length });
 }
 
 /**
@@ -154,4 +132,3 @@ function jsonResponse(obj) {
         .createTextOutput(JSON.stringify(obj))
         .setMimeType(ContentService.MimeType.JSON);
 }
-
