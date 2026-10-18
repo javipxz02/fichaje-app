@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Fichaje">
+    <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#1C1C1E" media="(prefers-color-scheme: dark)">
+    <meta name="description" content="App de fichaje personal - Control de horas y horas extra">
+    <title>Fichaje</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon.svg">
+    <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header" id="header">
+            <div class="header-content">
+                <h1 class="header-title" id="headerTitle">Fichaje</h1>
+                <span class="header-subtitle" id="headerDate"></span>
+            </div>
+        </header>
+
+        <!-- Screens -->
+        <main class="screens-container" id="screensContainer">
+
+            <!-- ========== HOME ========== -->
+            <section class="screen active" id="screen-home" data-title="Fichaje">
+                <div class="screen-scroll">
+                    <!-- Status pill -->
+                    <div class="status-pill" id="statusPill">
+                        <span class="status-dot" id="statusDot"></span>
+                        <span class="status-text" id="statusText">Sin fichar</span>
+                    </div>
+
+                    <!-- Timer -->
+                    <div class="timer-display" id="timerDisplay">
+                        <span class="timer-digit" id="timerH">00</span>
+                        <span class="timer-sep">:</span>
+                        <span class="timer-digit" id="timerM">00</span>
+                        <span class="timer-sep">:</span>
+                        <span class="timer-digit" id="timerS">00</span>
+                    </div>
+
+                    <!-- Clock button -->
+                    <div class="clock-btn-wrap">
+                        <button class="clock-btn" id="clockBtn" aria-label="Fichar entrada">
+                            <span class="clock-btn-ring" id="clockRing"></span>
+                            <span class="clock-btn-face" id="clockFace">
+                                <!-- Play icon (entrada) -->
+                                <svg id="iconPlay" class="clock-icon" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11.04-6.86a1 1 0 0 0 0-1.72L9.5 4.28A1 1 0 0 0 8 5.14z"/>
+                                </svg>
+                                <!-- Stop icon (salida) -->
+                                <svg id="iconStop" class="clock-icon hidden" viewBox="0 0 24 24" fill="currentColor">
+                                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                                </svg>
+                            </span>
+                        </button>
+                        <span class="clock-label" id="clockLabel">Fichar Entrada</span>
+                    </div>
+
+                    <!-- Today card -->
+                    <div class="card animate-in" id="todayCard">
+                        <div class="card-header">
+                            <h3 class="card-title">Hoy</h3>
+                        </div>
+                        <div class="summary-grid">
+                            <div class="summary-item">
+                                <span class="summary-val" id="todayWorked">0h 0min</span>
+                                <span class="summary-lbl">Trabajado</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="summary-val accent" id="todayExtra">0h 0min</span>
+                                <span class="summary-lbl">Extra</span>
+                            </div>
+                        </div>
+                        <div id="todayRecords" class="today-records"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========== HISTORY ========== -->
+            <section class="screen" id="screen-history" data-title="Historial">
+                <div class="screen-scroll">
+                    <div id="historyList" class="history-list"></div>
+                    <div class="empty-state" id="historyEmpty">
+                        <div class="empty-icon">📋</div>
+                        <p class="empty-title">Sin registros</p>
+                        <p class="empty-sub">Tus fichajes aparecerán aquí</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========== STATS ========== -->
+            <section class="screen" id="screen-stats" data-title="Resumen">
+                <div class="screen-scroll">
+                    <!-- Period toggle -->
+                    <div class="segment-control">
+                        <button class="segment active" data-period="week">Semana</button>
+                        <button class="segment" data-period="month">Mes</button>
+                        <div class="segment-indicator" id="segmentIndicator"></div>
+                    </div>
+
+                    <!-- Stat cards -->
+                    <div class="stats-grid">
+                        <div class="stat-card animate-in">
+                            <span class="stat-value" id="statTotal">0h</span>
+                            <span class="stat-label">Total</span>
+                        </div>
+                        <div class="stat-card animate-in" style="animation-delay:.05s">
+                            <span class="stat-value accent" id="statExtra">0h</span>
+                            <span class="stat-label">Extra</span>
+                        </div>
+                        <div class="stat-card animate-in" style="animation-delay:.1s">
+                            <span class="stat-value" id="statAvg">0h</span>
+                            <span class="stat-label">Media/día</span>
+                        </div>
+                        <div class="stat-card animate-in" style="animation-delay:.15s">
+                            <span class="stat-value" id="statDays">0</span>
+                            <span class="stat-label">Días</span>
+                        </div>
+                    </div>
+
+                    <!-- Bar chart -->
+                    <div class="card animate-in" style="animation-delay:.2s">
+                        <div class="card-header">
+                            <h3 class="card-title" id="chartTitle">Esta semana</h3>
+                        </div>
+                        <div class="bar-chart" id="barChart"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========== SETTINGS ========== -->
+            <section class="screen" id="screen-settings" data-title="Ajustes">
+                <div class="screen-scroll">
+                    <!-- Work hours -->
+                    <div class="settings-group">
+                        <h3 class="group-title">Jornada laboral</h3>
+                        <div class="group-list">
+                            <label class="setting-row">
+                                <span>Horas por día</span>
+                                <input type="number" id="cfgDailyH" value="8" min="1" max="24" step="0.5" class="setting-input">
+                            </label>
+                            <label class="setting-row">
+                                <span>Horas por semana</span>
+                                <input type="number" id="cfgWeeklyH" value="40" min="1" max="168" step="0.5" class="setting-input">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Google Sheets -->
+                    <div class="settings-group">
+                        <h3 class="group-title">Google Sheets</h3>
+                        <div class="group-list">
+                            <div class="setting-row column">
+                                <span>URL del Web App</span>
+                                <input type="url" id="cfgSheetsUrl" placeholder="https://script.google.com/macros/s/..." class="setting-input full">
+                                <span class="setting-hint">Despliega el Apps Script como web app y pega la URL aquí</span>
+                            </div>
+                            <div class="setting-row">
+                                <span>Sincronizar</span>
+                                <button class="btn-pill" id="btnSync">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+                                    Sincronizar
+                                </button>
+                            </div>
+                            <div class="sync-bar" id="syncBar">
+                                <span class="sync-msg" id="syncMsg"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data -->
+                    <div class="settings-group">
+                        <h3 class="group-title">Datos</h3>
+                        <div class="group-list">
+                            <div class="setting-row">
+                                <span>Exportar registros</span>
+                                <button class="btn-pill" id="btnExport">CSV</button>
+                            </div>
+                            <div class="setting-row">
+                                <span>Borrar todo</span>
+                                <button class="btn-pill danger" id="btnClear">Borrar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="app-footer">Fichaje v1.0 · Hecho con ♥</p>
+                </div>
+            </section>
+        </main>
+
+        <!-- Tab bar -->
+        <nav class="tab-bar" id="tabBar">
+            <button class="tab active" data-screen="home" aria-label="Inicio">
+                <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span class="tab-text">Inicio</span>
+            </button>
+            <button class="tab" data-screen="history" aria-label="Historial">
+                <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <rect x="3" y="3" width="18" height="18" rx="3"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/>
+                </svg>
+                <span class="tab-text">Historial</span>
+            </button>
+            <button class="tab" data-screen="stats" aria-label="Resumen">
+                <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <rect x="3" y="13" width="4" height="8" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/>
+                </svg>
+                <span class="tab-text">Resumen</span>
+            </button>
+            <button class="tab" data-screen="settings" aria-label="Ajustes">
+                <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+                <span class="tab-text">Ajustes</span>
+            </button>
+        </nav>
+
+        <!-- Toast -->
+        <div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+        <!-- Confirm dialog -->
+        <div class="modal-overlay" id="modalOverlay">
+            <div class="modal" id="modal">
+                <p class="modal-text" id="modalText"></p>
+                <div class="modal-actions">
+                    <button class="modal-btn cancel" id="modalCancel">Cancelar</button>
+                    <button class="modal-btn confirm" id="modalConfirm">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
